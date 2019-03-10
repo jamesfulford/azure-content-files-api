@@ -13,10 +13,12 @@ namespace ContentFilesAPI.Controllers {
     /// <summary>
     /// API for managing ContentFile resources
     /// </summary>
-    [Route ("api/v1/{containername:length(1,75)}/contentfiles")]
+    [Route ("api/v1/{containername}/contentfiles")]
     [ApiController]
     public class ContentFilesController : ControllerBase {
-        private string GetContentFileByIdRoute = "GetContentFileByIdRoute";
+        private const string GetContentFileByIdRoute = "GetContentFileByIdRoute";
+        private const string ContainernameParamName = "containername";
+        private const string FilenameParamName = "filename";
 
         /// <summary>
         /// Logger instance
@@ -48,19 +50,25 @@ namespace ContentFilesAPI.Controllers {
         /// <param name="filename"></param>
         /// <param name="file"></param>
         /// <returns></returns>
-        [HttpPut ("{filename:length(1,75)}")]
+        [HttpPut ("{filename}")]
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.Created)]
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
-        public IActionResult PutFile (string containername, string filename, IFormFile file) {
+        public IActionResult PutFile ([FromRoute] string containername, [FromRoute] string filename, IFormFile file) {
             try {
-                if (ModelState.IsValid) {
-                    // TODO(jamesfulford): Implement cloud storage
-                    return CreatedAtRoute (GetContentFileByIdRoute, new { containername, filename });
-                    // return NoContent();
-                } else {
-                    return BadRequest (MakeInvalidDataAttributeResponse ());
+                DTO.ErrorResponse err;
+                err = DetectErrorInResourceName (containername, ContainernameParamName);
+                if (err != null) {
+                    return BadRequest (err);
                 }
+
+                err = DetectErrorInResourceName (filename, FilenameParamName);
+                if (err != null) {
+                    return BadRequest (err);
+                }
+
+                // TODO(jamesfulford): Implement cloud storage
+                return CreatedAtRoute (GetContentFileByIdRoute, new { containername, filename });
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while putting {containername}:{filename}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -74,19 +82,26 @@ namespace ContentFilesAPI.Controllers {
         /// <param name="filename"></param>
         /// <param name="file"></param>
         /// <returns></returns>
-        [HttpPatch ("{filename:length(1,75)}")]
+        [HttpPatch ("{filename}")]
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public IActionResult UpdateFile (string containername, string filename, IFormFile file) {
+        public IActionResult UpdateFile ([FromRoute] string containername, [FromRoute] string filename, IFormFile file) {
             try {
-                if (ModelState.IsValid) {
-                    // TODO(jamesfulford): Implement cloud storage
-                    return NoContent ();
-                    // return NotFound();
-                } else {
-                    return BadRequest (MakeInvalidDataAttributeResponse ());
+                DTO.ErrorResponse err;
+                err = DetectErrorInResourceName (containername, ContainernameParamName);
+                if (err != null) {
+                    return BadRequest (err);
                 }
+
+                err = DetectErrorInResourceName (filename, FilenameParamName);
+                if (err != null) {
+                    return BadRequest (err);
+                }
+
+                // TODO(jamesfulford): Implement cloud storage
+                return NoContent ();
+                // return NotFound();
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while updating {containername}:{filename}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -99,18 +114,26 @@ namespace ContentFilesAPI.Controllers {
         /// <param name="containername"></param>
         /// <param name="filename"></param>
         /// <returns></returns>
-        [HttpDelete ("{filename:length(1,75)}")]
+        [HttpDelete ("{filename}")]
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
+        [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public IActionResult DeleteFile (string containername, string filename) {
+        public IActionResult DeleteFile ([FromRoute] string containername, [FromRoute] string filename) {
             try {
-                if (ModelState.IsValid) {
-                    // TODO(jamesfulford): Implement cloud storage
-                    return NoContent ();
-                    // return NotFound();
-                } else {
-                    return BadRequest (MakeInvalidDataAttributeResponse ());
+                DTO.ErrorResponse err;
+                err = DetectErrorInResourceName (containername, ContainernameParamName);
+                if (err != null) {
+                    return BadRequest (err);
                 }
+
+                err = DetectErrorInResourceName (filename, FilenameParamName);
+                if (err != null) {
+                    return BadRequest (err);
+                }
+
+                // TODO(jamesfulford): Implement cloud storage
+                return NoContent ();
+                // return NotFound();
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while deleting contentfile {containername}:{filename}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -123,17 +146,26 @@ namespace ContentFilesAPI.Controllers {
         /// <param name="containername"></param>
         /// <param name="filename"></param>
         /// <returns></returns>
-        [HttpGet ("{filename:length(1,75)}")]
+        [HttpGet ("{filename}")]
         [ProducesResponseType (typeof (string), (int) HttpStatusCode.OK)]
+        [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public ActionResult<string> GetByFileName (string containername, string filename) {
+        public ActionResult<string> GetFileByFileName ([FromRoute] string containername, [FromRoute] string filename) {
             try {
-                if (ModelState.IsValid) {
-                    // TODO(jamesfulford): Implement cloud storage
-                    return containername + filename;
-                } else {
-                    return BadRequest (MakeInvalidDataAttributeResponse ());
+                DTO.ErrorResponse err;
+                err = DetectErrorInResourceName (containername, ContainernameParamName);
+                if (err != null) {
+                    return BadRequest (err);
                 }
+
+                err = DetectErrorInResourceName (filename, FilenameParamName);
+                if (err != null) {
+                    return BadRequest (err);
+                }
+
+                // TODO(jamesfulford): Implement cloud storage
+                return containername + filename;
+                // return NotFound();
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while getting contentfile {filename}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -147,54 +179,40 @@ namespace ContentFilesAPI.Controllers {
         /// <returns>A list of all content files.</returns>
         [HttpGet]
         [ProducesResponseType (typeof (IEnumerable<DTO.ContentFileSummary>), (int) HttpStatusCode.OK)]
+        [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public ActionResult<IEnumerable<DTO.ContentFileSummary>> GetAll (string containername) {
+        public ActionResult<IEnumerable<DTO.ContentFileSummary>> GetAllFiles ([FromRoute] string containername) {
             try {
-                if (ModelState.IsValid) {
-                    // TODO(jamesfulford): Implement cloud storage
-                    return new DTO.ContentFileSummary[] {
-                        new DTO.ContentFileSummary (containername),
-                            new DTO.ContentFileSummary (containername),
-                    };
-                } else {
-                    return BadRequest (MakeInvalidDataAttributeResponse ());
+                DTO.ErrorResponse err;
+                err = DetectErrorInResourceName (containername, ContainernameParamName);
+                if (err != null) {
+                    return BadRequest (err);
                 }
+
+                return new DTO.ContentFileSummary[] {
+                    new DTO.ContentFileSummary (containername),
+                        new DTO.ContentFileSummary (containername),
+                };
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, "Error while getting all contentfiles");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
             }
         }
 
-        private DTO.ErrorNumber ErrorMessageToErrorNumber (string errorText) {
-            // These strings are set in data attributes on input payload as ErrorMessages.
-            switch (errorText) {
-                case "2":
-                    return DTO.ErrorNumber.TOOLARGE;
-                case "3":
-                    return DTO.ErrorNumber.REQUIRED;
-                case "5":
-                    return DTO.ErrorNumber.TOOSMALL;
-                case "6":
-                    return DTO.ErrorNumber.NOTNULL;
-                default:
-                    return DTO.ErrorNumber.UNKNOWN;
-
+        private DTO.ErrorResponse DetectErrorInResourceName (string val, string parameterName, int min = 1, int max = 75) {
+            if (val == null) {
+                return new DTO.ErrorResponse (DTO.ErrorNumber.NOTNULL, parameterName, val);
             }
-        }
-
-        private DTO.ErrorResponse MakeInvalidDataAttributeResponse () {
-            foreach (var key in ModelState.Keys) {
-                if (ModelState[key].ValidationState == Microsoft.AspNetCore.Mvc.ModelBinding.ModelValidationState.Invalid) {
-                    foreach (var error in ModelState[key].Errors) {
-                        return new DTO.ErrorResponse (
-                            ErrorMessageToErrorNumber (error.ErrorMessage),
-                            key,
-                            ModelState[key].RawValue == null ? null : ModelState[key].RawValue.ToString ()
-                        );
-                    }
-                }
+            if (val == "") {
+                return new DTO.ErrorResponse (DTO.ErrorNumber.REQUIRED, parameterName, val);
             }
-            throw new Exception ("ModelState is invalid, but has no erroring keys!");
+            if (val.Length < min) {
+                return new DTO.ErrorResponse (DTO.ErrorNumber.TOOSMALL, parameterName, val);
+            }
+            if (val.Length > max) {
+                return new DTO.ErrorResponse (DTO.ErrorNumber.TOOLARGE, parameterName, val);
+            }
+            return null;
         }
 
         private DTO.ErrorResponse MakeUnknownErrorResponse () {
