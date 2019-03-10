@@ -43,6 +43,12 @@ namespace ContentFilesAPI.Controllers {
             _configuration = configuration;
         }
 
+        private string StorageConnectionString {
+            get {
+                return _configuration.GetConnectionString ("DefaultStorageConnection");
+            }
+        }
+
         /// <summary>
         /// Creates/updates file with given filename.
         /// </summary>
