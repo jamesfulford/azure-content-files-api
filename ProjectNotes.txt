@@ -1,0 +1,2 @@
+
+Note: For unknown errors, this API will give error code `7` in the standard error response.
