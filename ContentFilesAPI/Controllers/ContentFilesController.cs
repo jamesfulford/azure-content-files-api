@@ -88,12 +88,14 @@ namespace ContentFilesAPI.Controllers {
                 await OverwriteBlob (blob, fileData);
 
                 if (preExisting) {
+                    _logger.LogInformation (Common.LoggingEvents.InsertItem, $"Inserted {containerName}:{fileName}");
                     return NoContent ();
                 } else {
+                    _logger.LogInformation (Common.LoggingEvents.UpdateItem, $"Updated {containerName}:{fileName} via put");
                     return CreatedAtRoute (GetContentFileByIdRoute, new { containerName, fileName }, null);
                 }
             } catch (Exception ex) {
-                _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while putting {containerName}:{fileName}");
+                _logger.LogError (Common.LoggingEvents.InsertItem, ex, $"Error while putting {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
             }
         }
@@ -129,18 +131,21 @@ namespace ContentFilesAPI.Controllers {
 
                 CloudBlobContainer container = GetContainer (containerName);
                 if (!await ContainerExists (container)) {
+                    _logger.LogWarning (Common.LoggingEvents.UpdateItemNotFound, $"Could not find containerName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
                 }
                 CloudBlockBlob blob = GetBlob (container, fileName);
                 if (await BlobExists (blob)) {
+                    _logger.LogInformation (Common.LoggingEvents.UpdateItem, $"Updated {containerName}:{fileName} via patch");
                     await OverwriteBlob (blob, fileData);
                     return NoContent ();
                 } else {
+                    _logger.LogWarning (Common.LoggingEvents.UpdateItemNotFound, $"Could not find fileName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
                 }
 
             } catch (Exception ex) {
-                _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while updating {containerName}:{fileName}");
+                _logger.LogError (Common.LoggingEvents.UpdateItem, ex, $"Error while updating {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
             }
         }
@@ -170,17 +175,20 @@ namespace ContentFilesAPI.Controllers {
 
                 CloudBlobContainer container = GetContainer (containerName);
                 if (!await ContainerExists (container)) {
+                    _logger.LogWarning (Common.LoggingEvents.DeleteItemNotFound, $"Could not find containerName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
                 }
                 CloudBlockBlob blob = GetBlob (container, fileName);
                 if (await BlobExists (blob)) {
+                    _logger.LogWarning (Common.LoggingEvents.DeleteItem, $"Deleted {containerName}:{fileName}");
                     await blob.DeleteAsync ();
                     return NoContent ();
                 } else {
+                    _logger.LogWarning (Common.LoggingEvents.DeleteItemNotFound, $"Could not find fileName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
                 }
             } catch (Exception ex) {
-                _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while deleting contentfile {containerName}:{fileName}");
+                _logger.LogError (Common.LoggingEvents.DeleteItem, ex, $"Error while deleting contentfile {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
             }
         }
@@ -210,14 +218,15 @@ namespace ContentFilesAPI.Controllers {
 
                 CloudBlobContainer container = GetContainer (containerName);
                 if (!await ContainerExists (container)) {
+                    _logger.LogWarning (Common.LoggingEvents.GetItemNotFound, $"Could not find containerName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
                 }
                 CloudBlockBlob blob = GetBlob (container, fileName);
                 if (await BlobExists (blob)) {
-                    using (Stream downloadFileStream = await blob.OpenReadAsync ()) {
-                        return File (downloadFileStream, blob.Properties.ContentType);
-                    }
+                    _logger.LogWarning (Common.LoggingEvents.GetItem, $"Got {containerName}:{fileName}");
+                    return File (await blob.OpenReadAsync (), blob.Properties.ContentType);
                 } else {
+                    _logger.LogWarning (Common.LoggingEvents.GetItemNotFound, $"Could not find fileName: {containerName}:{fileName}");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
                 }
             } catch (Exception ex) {
@@ -245,6 +254,7 @@ namespace ContentFilesAPI.Controllers {
 
                 CloudBlobContainer container = GetContainer (containerName);
                 if (!await ContainerExists (container)) {
+                    _logger.LogWarning (Common.LoggingEvents.GetItemNotFound, $"Could not find containerName: {containerName} for get all");
                     return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
                 }
 
@@ -256,7 +266,7 @@ namespace ContentFilesAPI.Controllers {
                         .Select (b => new DTO.ContentFileSummary (((CloudBlockBlob) b).Name))
                     );
                 }
-                return Ok(new List<DTO.ContentFileSummary> { });
+                return Ok (new List<DTO.ContentFileSummary> { });
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while getting all contentfiles from {containerName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
