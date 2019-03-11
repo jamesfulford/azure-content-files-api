@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -8,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace ContentFilesAPI.Controllers {
     /// <summary>
@@ -60,7 +63,7 @@ namespace ContentFilesAPI.Controllers {
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.Created)]
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
-        public IActionResult PutFile ([FromRoute] string containerName, [FromRoute] string fileName, IFormFile fileData) {
+        public async Task<IActionResult> PutFile ([FromRoute] string containerName, [FromRoute] string fileName, IFormFile fileData) {
             try {
                 DTO.ErrorResponse err;
                 err = DetectErrorInResourceName (containerName, ContainerNameParamName);
@@ -78,8 +81,17 @@ namespace ContentFilesAPI.Controllers {
                     return BadRequest (err);
                 }
 
-                // TODO(jamesfulford): Implement cloud storage
-                return CreatedAtRoute (GetContentFileByIdRoute, new { containerName, fileName });
+                CloudBlobContainer container = GetContainer (containerName);
+                IdempotentCreateContainer (container, containerName.ToLower ().Contains ("public"));
+                CloudBlockBlob blob = GetBlob (container, fileName);
+                bool preExisting = await BlobExists (blob);
+                await OverwriteBlob (blob, fileData);
+
+                if (preExisting) {
+                    return NoContent ();
+                } else {
+                    return CreatedAtRoute (GetContentFileByIdRoute, new { containerName, fileName }, null);
+                }
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while putting {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -97,7 +109,7 @@ namespace ContentFilesAPI.Controllers {
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public IActionResult UpdateFile ([FromRoute] string containerName, [FromRoute] string fileName, IFormFile fileData) {
+        public async Task<IActionResult> UpdateFile ([FromRoute] string containerName, [FromRoute] string fileName, IFormFile fileData) {
             try {
                 DTO.ErrorResponse err;
                 err = DetectErrorInResourceName (containerName, ContainerNameParamName);
@@ -115,9 +127,18 @@ namespace ContentFilesAPI.Controllers {
                     return BadRequest (err);
                 }
 
-                // TODO(jamesfulford): Implement cloud storage
-                return NoContent ();
-                // return NotFound();
+                CloudBlobContainer container = GetContainer (containerName);
+                if (!await ContainerExists (container)) {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
+                }
+                CloudBlockBlob blob = GetBlob (container, fileName);
+                if (await BlobExists (blob)) {
+                    await OverwriteBlob (blob, fileData);
+                    return NoContent ();
+                } else {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
+                }
+
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while updating {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -134,7 +155,7 @@ namespace ContentFilesAPI.Controllers {
         [ProducesResponseType (typeof (void), (int) HttpStatusCode.NoContent)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public IActionResult DeleteFile ([FromRoute] string containerName, [FromRoute] string fileName) {
+        public async Task<IActionResult> DeleteFile ([FromRoute] string containerName, [FromRoute] string fileName) {
             try {
                 DTO.ErrorResponse err;
                 err = DetectErrorInResourceName (containerName, ContainerNameParamName);
@@ -147,9 +168,17 @@ namespace ContentFilesAPI.Controllers {
                     return BadRequest (err);
                 }
 
-                // TODO(jamesfulford): Implement cloud storage
-                return NoContent ();
-                // return NotFound();
+                CloudBlobContainer container = GetContainer (containerName);
+                if (!await ContainerExists (container)) {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
+                }
+                CloudBlockBlob blob = GetBlob (container, fileName);
+                if (await BlobExists (blob)) {
+                    await blob.DeleteAsync ();
+                    return NoContent ();
+                } else {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
+                }
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while deleting contentfile {containerName}:{fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -162,11 +191,11 @@ namespace ContentFilesAPI.Controllers {
         /// <param name="containerName"></param>
         /// <param name="fileName"></param>
         /// <returns></returns>
-        [HttpGet ("{fileName}")]
+        [HttpGet ("{fileName}", Name = GetContentFileByIdRoute)]
         [ProducesResponseType (typeof (string), (int) HttpStatusCode.OK)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public ActionResult<string> GetFileByFileName ([FromRoute] string containerName, [FromRoute] string fileName) {
+        public async Task<IActionResult> GetFileByFileName ([FromRoute] string containerName, [FromRoute] string fileName) {
             try {
                 DTO.ErrorResponse err;
                 err = DetectErrorInResourceName (containerName, ContainerNameParamName);
@@ -179,9 +208,18 @@ namespace ContentFilesAPI.Controllers {
                     return BadRequest (err);
                 }
 
-                // TODO(jamesfulford): Implement cloud storage
-                return containerName + fileName;
-                // return NotFound();
+                CloudBlobContainer container = GetContainer (containerName);
+                if (!await ContainerExists (container)) {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
+                }
+                CloudBlockBlob blob = GetBlob (container, fileName);
+                if (await BlobExists (blob)) {
+                    using (Stream downloadFileStream = await blob.OpenReadAsync ()) {
+                        return File (downloadFileStream, blob.Properties.ContentType);
+                    }
+                } else {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, FileNameParamName, fileName));
+                }
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while getting contentfile {fileName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -197,7 +235,7 @@ namespace ContentFilesAPI.Controllers {
         [ProducesResponseType (typeof (IEnumerable<DTO.ContentFileSummary>), (int) HttpStatusCode.OK)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.BadRequest)]
         [ProducesResponseType (typeof (DTO.ErrorResponse), (int) HttpStatusCode.NotFound)]
-        public ActionResult<IEnumerable<DTO.ContentFileSummary>> GetAllFiles ([FromRoute] string containerName) {
+        public async Task<ActionResult> GetAllFiles ([FromRoute] string containerName) {
             try {
                 DTO.ErrorResponse err;
                 err = DetectErrorInResourceName (containerName, ContainerNameParamName);
@@ -205,10 +243,20 @@ namespace ContentFilesAPI.Controllers {
                     return BadRequest (err);
                 }
 
-                return new DTO.ContentFileSummary[] {
-                    new DTO.ContentFileSummary (containerName),
-                        new DTO.ContentFileSummary (containerName),
-                };
+                CloudBlobContainer container = GetContainer (containerName);
+                if (!await ContainerExists (container)) {
+                    return NotFound (new DTO.ErrorResponse (DTO.ErrorNumber.NOTFOUND, ContainerNameParamName, containerName));
+                }
+
+                BlobResultSegment result = await container.ListBlobsSegmentedAsync (null, true, BlobListingDetails.Metadata, null, null, new BlobRequestOptions (), new OperationContext ());
+                if (result?.Results != null) {
+                    return Ok (
+                        result.Results
+                        .Where (b => b is CloudBlockBlob)
+                        .Select (b => new DTO.ContentFileSummary (((CloudBlockBlob) b).Name))
+                    );
+                }
+                return Ok(new List<DTO.ContentFileSummary> { });
             } catch (Exception ex) {
                 _logger.LogError (Common.LoggingEvents.GetItem, ex, $"Error while getting all contentfiles from {containerName}");
                 return StatusCode ((int) HttpStatusCode.InternalServerError, MakeUnknownErrorResponse ());
@@ -219,7 +267,7 @@ namespace ContentFilesAPI.Controllers {
             if (val == null) {
                 return new DTO.ErrorResponse (DTO.ErrorNumber.NOTNULL, parameterName, val);
             }
-            if (val == "") {
+            if (string.IsNullOrWhiteSpace (val)) {
                 return new DTO.ErrorResponse (DTO.ErrorNumber.REQUIRED, parameterName, val);
             }
             if (val.Length < min) {
@@ -243,6 +291,37 @@ namespace ContentFilesAPI.Controllers {
 
         private DTO.ErrorResponse MakeUnknownErrorResponse () {
             return new DTO.ErrorResponse (DTO.ErrorNumber.UNKNOWN);
+        }
+
+        private CloudBlobContainer GetContainer (string containerName) {
+            CloudStorageAccount storageAccount = CloudStorageAccount.Parse (StorageConnectionString);
+            CloudBlobClient BlobClient = storageAccount.CreateCloudBlobClient ();
+            return BlobClient.GetContainerReference (containerName.ToLower ());
+        }
+
+        private async Task<bool> ContainerExists (CloudBlobContainer container) {
+            return container != null && await container.ExistsAsync ();
+        }
+
+        private async void IdempotentCreateContainer (CloudBlobContainer container, bool makePublic) {
+            await container.CreateIfNotExistsAsync ();
+            BlobContainerPermissions perm = new BlobContainerPermissions { PublicAccess = makePublic ? BlobContainerPublicAccessType.Blob : BlobContainerPublicAccessType.Off };
+            await container.SetPermissionsAsync (perm);
+        }
+
+        private CloudBlockBlob GetBlob (CloudBlobContainer container, string blobId) {
+            return container.GetBlockBlobReference (blobId);
+        }
+
+        private async Task<bool> BlobExists (CloudBlockBlob blob) {
+            return blob != null && !blob.IsDeleted && await blob.ExistsAsync ();
+        }
+
+        private async Task OverwriteBlob (CloudBlockBlob blob, IFormFile file) {
+            using (Stream uploadedFileStream = file.OpenReadStream ()) {
+                blob.Properties.ContentType = file.ContentType;
+                await blob.UploadFromStreamAsync (uploadedFileStream);
+            }
         }
     }
 }
