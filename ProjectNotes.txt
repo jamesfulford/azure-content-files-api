@@ -1,7 +1,0 @@
-Assignment #2: Tasks API App Service
-James Fulford
-jaf968@g.harvard.edu
-
-Here's my swagger UI URL: https://contentfilesapi20190311011225.azurewebsites.net/swagger/index.html
-
-Note: For unknown errors, this API will give error code `7` in the standard error response format.
